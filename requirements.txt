@@ -7,6 +7,10 @@ pandas>=2.0.0
 # Web Application Framework
 streamlit>=1.30.0
 
+# Interactive Maps
+folium>=0.15.0
+streamlit-folium>=0.18.0
+
 # Environment variables management
 python-dotenv>=1.0.0
 
