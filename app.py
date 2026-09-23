@@ -134,6 +134,79 @@ def filter_data_by_location(
     return df
 
 
+def render_metrics(df: pd.DataFrame):
+    """
+    Render summary metric cards (Min Temp, Max Temp, Avg Temp, Rain PoP, Comfort).
+
+    :param df: Filtered weather DataFrame.
+    """
+    st.subheader("📌 區域氣候重點指標速覽")
+
+    if df.empty:
+        st.info("尚無氣候數據可供指標計算呈現。")
+        return
+
+    max_temp = (
+        df["maxTemp"].max()
+        if "maxTemp" in df.columns and not df["maxTemp"].dropna().empty
+        else None
+    )
+    min_temp = (
+        df["minTemp"].min()
+        if "minTemp" in df.columns and not df["minTemp"].dropna().empty
+        else None
+    )
+    avg_temp = (
+        round(df["avgTemp"].mean(), 1)
+        if "avgTemp" in df.columns and not df["avgTemp"].dropna().empty
+        else None
+    )
+
+    avg_pop = (
+        round(df["pop"].mean(), 1)
+        if "pop" in df.columns and not df["pop"].dropna().empty
+        else None
+    )
+
+    most_common_comfort = (
+        df["comfort"].mode().iloc[0]
+        if "comfort" in df.columns and not df["comfort"].dropna().empty
+        else "無資料"
+    )
+
+    col1, col2, col3, col4, col5 = st.columns(5)
+
+    with col1:
+        st.metric(
+            label="🔥 最高氣溫",
+            value=f"{max_temp:.1f} °C" if max_temp is not None else "--",
+        )
+
+    with col2:
+        st.metric(
+            label="❄️ 最低氣溫",
+            value=f"{min_temp:.1f} °C" if min_temp is not None else "--",
+        )
+
+    with col3:
+        st.metric(
+            label="🌡️ 平均氣溫",
+            value=f"{avg_temp:.1f} °C" if avg_temp is not None else "--",
+        )
+
+    with col4:
+        st.metric(
+            label="🌧️ 平均降雨機率",
+            value=f"{avg_pop:.0f} %" if avg_pop is not None else "--",
+        )
+
+    with col5:
+        st.metric(
+            label="🛋️ 體感舒適度",
+            value=str(most_common_comfort),
+        )
+
+
 def render_temperature_chart(df: pd.DataFrame):
     """
     Render temperature trend line chart for minTemp and maxTemp over time.
@@ -231,9 +304,11 @@ def main():
     filtered_df = filter_data_by_location(df, selected_location)
 
     st.subheader(f"📍 當前選擇區域：`{selected_location}`")
-    st.success(
-        f"✅ 已載入 `{len(filtered_df)}` 筆天氣觀測與預報數據（全島共包含 {len(locations)} 個縣市測站）"
-    )
+
+    # Render Metric Cards
+    render_metrics(filtered_df)
+
+    st.divider()
 
     # Render temperature trend chart
     render_temperature_chart(filtered_df)

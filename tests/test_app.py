@@ -61,6 +61,32 @@ class TestStreamlitApp(unittest.TestCase):
         self.assertEqual(len(taipei_filtered), 1)
         self.assertEqual(taipei_filtered.iloc[0]["locationName"], "臺北市")
 
+    @patch("streamlit.metric")
+    @patch("streamlit.columns")
+    @patch("streamlit.subheader")
+    def test_render_metrics(self, mock_subheader, mock_columns, mock_metric):
+        """Test rendering summary metric cards."""
+        mock_cols = [MagicMock() for _ in range(5)]
+        mock_columns.return_value = mock_cols
+
+        sample_df = pd.DataFrame(
+            [
+                {
+                    "locationName": "臺北市",
+                    "minTemp": 24.0,
+                    "maxTemp": 31.0,
+                    "avgTemp": 27.5,
+                    "pop": 20.0,
+                    "comfort": "舒適",
+                }
+            ]
+        )
+
+        app.render_metrics(sample_df)
+        mock_subheader.assert_called_once()
+        mock_columns.assert_called_once_with(5)
+        self.assertEqual(mock_metric.call_count, 5)
+
     @patch("streamlit.line_chart")
     @patch("streamlit.subheader")
     def test_render_temperature_chart(self, mock_subheader, mock_line_chart):
