@@ -6,6 +6,8 @@ and forecast data fetched from CWA API and persisted in SQLite.
 """
 
 import logging
+import streamlit as st
+from pathlib import Path
 from typing import List, Optional
 import pandas as pd
 import streamlit as st
@@ -20,9 +22,19 @@ from src.db import (
     save_forecast_dataframe,
 )
 from src.map_visualization import create_taiwan_weather_map
+from src.processor import filter_by_location, filter_by_temp_range, filter_by_condition
+import streamlit as st
 from src.processor import process_forecast_to_dataframe
 
 logger = logging.getLogger(__name__)
+
+# Load custom CSS for responsive design and dark mode
+def load_custom_css():
+    css_path = Path(__file__).parent / "src" / "style.css"
+    if css_path.is_file():
+        with open(css_path, "r", encoding="utf-8") as f:
+            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
+
 
 ALL_LOCATIONS_OPTION = "全台灣 (All Locations)"
 
@@ -79,16 +91,32 @@ def render_header(latest_update: Optional[str] = None):
     st.divider()
 
 
-def render_sidebar(available_locations: List[str]) -> str:
-    """
-    Render sidebar configuration, region dropdown selector, and controls.
+def render_sidebar(available_locations: List[str]):
+    """Render sidebar with location selector, theme toggle, auto‑refresh, and advanced filters.
 
-    :param available_locations: List of location names available in database.
-    :return: Selected location string (e.g. '全台灣 (All Locations)' or '臺北市').
+    Returns a tuple:
+        selected_location (str)
+        temp_range (tuple[float|None, float|None])
+        conditions (list[str])
+        time_range (tuple[pd.Timestamp|None, pd.Timestamp|None])
     """
     with st.sidebar:
         st.header("⚙️ 儀表板控制台")
 
+        # Theme toggle
+        dark_mode = st.checkbox("🌙 暗色模式", value=False, help="切換深色或淺色佈景")
+        if dark_mode:
+            st.markdown("""<style>body {background-color: #121212; color: #e0e0e0;}</style>""", unsafe_allow_html=True)
+        else:
+            st.markdown("""<style>body {background-color: #ffffff; color: #000000;}</style>""", unsafe_allow_html=True)
+
+        # Auto‑refresh toggle (10‑minute interval)
+        auto_refresh = st.checkbox("⏱️ 自動刷新 (每 10 分鐘)", value=False, help="自動重新載入最新天氣資料")
+        if auto_refresh:
+            # Streamlit experimental autorefresh (interval in milliseconds)
+            st.experimental_autorefresh(interval=10 * 60 * 1000, limit=None, key="auto_refresh")
+
+        # Location selector
         location_options = [ALL_LOCATIONS_OPTION] + sorted(available_locations)
         selected_location = st.selectbox(
             "📍 選擇縣市區域",
@@ -96,6 +124,31 @@ def render_sidebar(available_locations: List[str]) -> str:
             index=0,
             help="選擇欲檢視的台灣縣市區域，或選擇『全台灣』觀看全島總覽",
         )
+
+        st.divider()
+
+        # Advanced filters
+        st.subheader("🔎 進階篩選")
+        # Temperature range slider (°C)
+        temp_min, temp_max = st.slider(
+            "溫度範圍 (°C)",
+            min_value=-30,
+            max_value=50,
+            value=( -10, 40),
+            step=1,
+        )
+        # Weather condition multiselect
+        condition_options = ["晴", "雨", "陰", "多雲", "霧", "雷", "雪"]
+        selected_conditions = st.multiselect(
+            "天氣狀況",
+            options=condition_options,
+            default=condition_options,
+            help="勾選想要顯示的天氣現象",
+        )
+        # Time range picker (date time)
+        date_min = st.date_input("開始日期", value=None)
+        date_max = st.date_input("結束日期", value=None)
+        # Convert to timestamps later in main()
 
         st.divider()
 
@@ -115,7 +168,14 @@ def render_sidebar(available_locations: List[str]) -> str:
             """
         )
 
-        return selected_location
+        return (
+            selected_location,
+            (temp_min, temp_max),
+            selected_conditions,
+            (date_min, date_max),
+            dark_mode,
+            auto_refresh,
+        )
 
 
 def filter_data_by_location(
@@ -303,11 +363,19 @@ def render_data_table(df: pd.DataFrame):
 def main():
     """Main application entry point."""
     init_page()
+    load_custom_css()
 
     # Load data and available location list
     df = load_weather_data()
     locations = get_all_locations()
-    selected_location = render_sidebar(locations)
+    (
+        selected_location,
+        temp_range,
+        conditions,
+        date_range,
+        dark_mode,
+        auto_refresh,
+    ) = render_sidebar(locations)
     latest_update = get_latest_update_time()
 
     render_header(latest_update)
@@ -318,7 +386,25 @@ def main():
         )
         return
 
+    # Apply location filter first
     filtered_df = filter_data_by_location(df, selected_location)
+    # Advanced filters
+    if not filtered_df.empty:
+        # Temperature range filter (apply to minTemp & maxTemp columns if present)
+        min_temp, max_temp = temp_range
+        filtered_df = filter_by_temp_range(filtered_df, min_temp, max_temp)
+        # Weather condition filter
+        filtered_df = filter_by_condition(filtered_df, conditions)
+        # Date range filter (if both dates provided)
+        start_date, end_date = date_range
+        if start_date and end_date:
+            try:
+                import pandas as pd
+                start_ts = pd.to_datetime(start_date)
+                end_ts = pd.to_datetime(end_date)
+                filtered_df = filtered_df[(filtered_df["startTime"] >= start_ts) & (filtered_df["endTime"] <= end_ts)]
+            except Exception as e:
+                logger.error("Date range filter failed: %s", e)
 
     st.subheader(f"📍 當前選擇區域：`{selected_location}`")
 

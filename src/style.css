@@ -1,0 +1,35 @@
+/* src/style.css */
+/* Responsive layout adjustments */
+@media (max-width: 768px) {
+  /* Stack map and chart vertically on small screens */
+  .stColumns > div {
+    width: 100% !important;
+    margin-bottom: 1rem;
+  }
+}
+
+/* Dark mode palette (used when body class .dark-mode is set) */
+body.dark-mode {
+  background-color: #121212;
+  color: #e0e0e0;
+}
+
+/* Light mode defaults */
+body {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+/* Card styling – give a subtle glassmorphism effect */
+.stMetric {
+  backdrop-filter: blur(5px);
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 8px;
+  padding: 0.5rem;
+}
+
+/* Adjust metric font sizes for better readability */
+.stMetric > div > div:nth-child(2) {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
