@@ -2,14 +2,14 @@
 Database management module for Taiwan Weather Forecast.
 
 Provides SQLite connection handling, schema creation, transactional context
-management, and DataFrame persistence interfaces.
+management, DataFrame persistence, and SQL query interfaces.
 """
 
 import logging
 import os
 import sqlite3
 from contextlib import contextmanager
-from typing import Generator, Optional
+from typing import Generator, List, Optional
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -143,3 +143,101 @@ def save_forecast_dataframe(
         inserted_count = cursor.rowcount
         logger.info("Successfully upserted %d records into database.", inserted_count)
         return inserted_count
+
+
+def query_forecast_data(
+    location_name: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    db_path: Optional[str] = None,
+) -> pd.DataFrame:
+    """
+    Query weather forecast records from SQLite database into a Pandas DataFrame.
+
+    :param location_name: Optional county/location name filter.
+    :param start_date: Optional start date/time string filter (>=).
+    :param end_date: Optional end date/time string filter (<=).
+    :param db_path: Optional custom database path.
+    :return: Filtered Pandas DataFrame.
+    """
+    create_tables(db_path)
+
+    query = """
+    SELECT 
+        location_name AS locationName,
+        start_time AS startTime,
+        end_time AS endTime,
+        min_temp AS minTemp,
+        max_temp AS maxTemp,
+        temp_diff AS tempDiff,
+        avg_temp AS avgTemp,
+        weather,
+        pop,
+        comfort,
+        updated_at AS updatedAt
+    FROM weather_forecasts
+    WHERE 1=1
+    """
+    params: List[Any] = []
+
+    if location_name:
+        query += " AND location_name = ?"
+        params.append(location_name)
+
+    if start_date:
+        query += " AND start_time >= ?"
+        params.append(str(start_date))
+
+    if end_date:
+        query += " AND start_time <= ?"
+        params.append(str(end_date))
+
+    query += " ORDER BY location_name, start_time"
+
+    with get_db_connection(db_path) as conn:
+        df = pd.read_sql_query(query, conn, params=params)
+
+    if not df.empty:
+        if "startTime" in df.columns:
+            df["startTime"] = pd.to_datetime(df["startTime"], errors="coerce")
+        if "endTime" in df.columns:
+            df["endTime"] = pd.to_datetime(df["endTime"], errors="coerce")
+
+    logger.info("Executed SQL query, returned %d rows.", len(df))
+    return df
+
+
+def get_all_locations(db_path: Optional[str] = None) -> List[str]:
+    """
+    Retrieve distinct location names from database sorted alphabetically.
+
+    :param db_path: Optional custom database path.
+    :return: List of location name strings.
+    """
+    create_tables(db_path)
+    sql = "SELECT DISTINCT location_name FROM weather_forecasts ORDER BY location_name"
+
+    with get_db_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        rows = cursor.fetchall()
+        return [row["location_name"] for row in rows]
+
+
+def get_latest_update_time(db_path: Optional[str] = None) -> Optional[str]:
+    """
+    Retrieve latest updated_at timestamp from database.
+
+    :param db_path: Optional custom database path.
+    :return: Timestamp string or None if database is empty.
+    """
+    create_tables(db_path)
+    sql = "SELECT MAX(updated_at) AS max_update FROM weather_forecasts"
+
+    with get_db_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(sql)
+        row = cursor.fetchone()
+        if row and row["max_update"]:
+            return str(row["max_update"])
+        return None
