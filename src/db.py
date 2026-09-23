@@ -1,8 +1,8 @@
 """
 Database management module for Taiwan Weather Forecast.
 
-Provides SQLite connection handling, path resolution, and transactional
-context management for database operations.
+Provides SQLite connection handling, schema creation, transactional context
+management, and DataFrame persistence interfaces.
 """
 
 import logging
@@ -10,6 +10,7 @@ import os
 import sqlite3
 from contextlib import contextmanager
 from typing import Generator, Optional
+import pandas as pd
 
 logger = logging.getLogger(__name__)
 
@@ -58,3 +59,87 @@ def get_db_connection(
         raise
     finally:
         conn.close()
+
+
+def create_tables(db_path: Optional[str] = None) -> None:
+    """
+    Create the weather_forecasts table and associated indices if they do not exist.
+
+    :param db_path: Optional custom path to SQLite database.
+    """
+    schema_sql = """
+    CREATE TABLE IF NOT EXISTS weather_forecasts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        location_name TEXT NOT NULL,
+        start_time TEXT NOT NULL,
+        end_time TEXT NOT NULL,
+        min_temp REAL,
+        max_temp REAL,
+        temp_diff REAL,
+        avg_temp REAL,
+        weather TEXT,
+        pop REAL,
+        comfort TEXT,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE(location_name, start_time)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_location_start 
+    ON weather_forecasts(location_name, start_time);
+    """
+    with get_db_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.executescript(schema_sql)
+        logger.info("Database schema and indices created successfully.")
+
+
+def save_forecast_dataframe(
+    df: pd.DataFrame, db_path: Optional[str] = None
+) -> int:
+    """
+    Save or update a weather forecast DataFrame into the SQLite database.
+
+    :param df: Weather DataFrame produced by process_forecast_to_dataframe.
+    :param db_path: Optional custom database path.
+    :return: Number of rows inserted or updated.
+    """
+    if df.empty:
+        logger.warning("Attempted to save an empty DataFrame to database.")
+        return 0
+
+    create_tables(db_path)
+
+    upsert_sql = """
+    INSERT INTO weather_forecasts (
+        location_name, start_time, end_time, min_temp, max_temp,
+        temp_diff, avg_temp, weather, pop, comfort
+    ) VALUES (
+        :locationName, :startTime, :endTime, :minTemp, :maxTemp,
+        :tempDiff, :avgTemp, :weather, :pop, :comfort
+    )
+    ON CONFLICT(location_name, start_time) DO UPDATE SET
+        end_time = excluded.end_time,
+        min_temp = excluded.min_temp,
+        max_temp = excluded.max_temp,
+        temp_diff = excluded.temp_diff,
+        avg_temp = excluded.avg_temp,
+        weather = excluded.weather,
+        pop = excluded.pop,
+        comfort = excluded.comfort,
+        updated_at = CURRENT_TIMESTAMP;
+    """
+
+    records_df = df.copy()
+    if "startTime" in records_df.columns:
+        records_df["startTime"] = records_df["startTime"].astype(str)
+    if "endTime" in records_df.columns:
+        records_df["endTime"] = records_df["endTime"].astype(str)
+
+    records = records_df.to_dict(orient="records")
+
+    with get_db_connection(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.executemany(upsert_sql, records)
+        inserted_count = cursor.rowcount
+        logger.info("Successfully upserted %d records into database.", inserted_count)
+        return inserted_count
