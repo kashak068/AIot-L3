@@ -1,22 +1,18 @@
 """
 Central Weather Administration (CWA) API Client Module
 
-This module provides a client interface for fetching weather data from Taiwan's
-Central Weather Administration (CWA) Open Data API platform.
+Provides HTTP request functionality to interact with Taiwan's CWA Open Data API.
+Integrates with src.config for secure environment configurations.
 """
 
 import logging
-import os
 from typing import Any, Dict, Optional
-from dotenv import load_dotenv
 import requests
 
-# Load environment variables from .env file if available
-load_dotenv()
+from src.config import DEFAULT_CWA_BASE_URL, get_cwa_api_key, get_cwa_base_url
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_BASE_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore"
 DEFAULT_TIMEOUT = 10  # HTTP request timeout in seconds
 
 
@@ -38,20 +34,16 @@ class CWAApiClient:
         """
         Initialize the CWA API Client.
 
-        :param api_key: CWA API Authorization Key. Defaults to the CWA_API_KEY environment variable.
-        :param base_url: Base URL for CWA API endpoints. Defaults to CWA_API_BASE_URL env var or official endpoint.
-        :param timeout: HTTP request timeout duration in seconds (default: 10).
+        :param api_key: CWA API Authorization Key. Defaults to get_cwa_api_key().
+        :param base_url: Base URL for CWA API endpoints. Defaults to get_cwa_base_url().
+        :param timeout: HTTP request timeout duration in seconds.
         """
-        self.api_key = api_key or os.getenv("CWA_API_KEY")
-        self.base_url = (
-            base_url or os.getenv("CWA_API_BASE_URL", DEFAULT_BASE_URL)
-        ).rstrip("/")
+        self.api_key = api_key or get_cwa_api_key()
+        self.base_url = (base_url or get_cwa_base_url()).rstrip("/")
         self.timeout = timeout
 
         if not self.api_key:
-            logger.warning(
-                "CWA_API_KEY is not set in environment variables or passed to CWAApiClient."
-            )
+            logger.warning("CWA API key is not configured.")
 
     def get_dataset(
         self,
@@ -61,15 +53,15 @@ class CWAApiClient:
         """
         Fetch a weather dataset from the CWA Open Data API.
 
-        :param dataset_id: CWA Dataset ID (e.g., 'F-C0032-001' for 36-hour forecast).
-        :param params: Additional query parameters (e.g., locationName, elementName).
+        :param dataset_id: CWA Dataset ID (default: 'F-C0032-001' for 36-hour forecast).
+        :param params: Additional query parameters.
         :return: Parsed JSON response dictionary.
         :raises CWAAPIError: Raised when API key is missing, request times out,
                              HTTP error occurs, or response is not valid JSON.
         """
         if not self.api_key:
             raise CWAAPIError(
-                "Missing API key. Please set the CWA_API_KEY environment variable or pass api_key."
+                "Missing API key. Please configure CWA_API_KEY in your environment or .env file."
             )
 
         url = f"{self.base_url}/{dataset_id}"
@@ -77,7 +69,7 @@ class CWAApiClient:
         if params:
             query_params.update(params)
 
-        logger.info("Fetching data from CWA API dataset: %s", dataset_id)
+        logger.info("Sending HTTP GET request to CWA API dataset: %s", dataset_id)
 
         try:
             response = requests.get(
@@ -102,10 +94,20 @@ class CWAApiClient:
 
         try:
             data = response.json()
-            logger.info(
-                "Successfully retrieved JSON response for dataset: %s", dataset_id
-            )
+            logger.info("Successfully retrieved JSON response for dataset: %s", dataset_id)
             return data
         except ValueError as err:
             logger.error("Failed to parse JSON response from CWA API: %s", err)
             raise CWAAPIError("Invalid JSON response received from CWA API.") from err
+
+    def fetch_forecast_36h(self, location_name: Optional[str] = None) -> Dict[str, Any]:
+        """
+        Convenience method to fetch 36-hour general weather forecast (F-C0032-001).
+
+        :param location_name: Optional county/location name to filter (e.g., '臺北市').
+        :return: Parsed JSON response dictionary.
+        """
+        params = {}
+        if location_name:
+            params["locationName"] = location_name
+        return self.get_dataset(dataset_id="F-C0032-001", params=params)

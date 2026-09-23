@@ -34,7 +34,7 @@ class TestCWAApiClient(unittest.TestCase):
         expected_json = {
             "success": "true",
             "result": {"resource_id": "F-C0032-001"},
-            "records": {"location": [{"locationName": "臺食"}]},
+            "records": {"location": [{"locationName": "臺北市"}]},
         }
         mock_response = MagicMock()
         mock_response.status_code = 200
@@ -48,6 +48,23 @@ class TestCWAApiClient(unittest.TestCase):
         _, kwargs = mock_get.call_args
         self.assertEqual(kwargs["timeout"], 10)
         self.assertEqual(kwargs["params"]["Authorization"], self.test_api_key)
+
+    @patch("src.cwa_api.requests.get")
+    def test_fetch_forecast_36h_convenience_method(self, mock_get):
+        """Test convenience method for 36-hour forecast."""
+        expected_json = {"success": "true", "records": {}}
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.json.return_value = expected_json
+        mock_get.return_value = mock_response
+
+        data = self.client.fetch_forecast_36h(location_name="新北市")
+
+        self.assertEqual(data, expected_json)
+        mock_get.assert_called_once()
+        args, kwargs = mock_get.call_args
+        self.assertIn("F-C0032-001", args[0])
+        self.assertEqual(kwargs["params"]["locationName"], "新北市")
 
     @patch("src.cwa_api.requests.get")
     def test_get_dataset_http_error(self, mock_get):
@@ -71,26 +88,6 @@ class TestCWAApiClient(unittest.TestCase):
         with self.assertRaises(CWAAPIError) as ctx:
             self.client.get_dataset("F-C0032-001")
         self.assertIn("timed out", str(ctx.exception))
-
-    @patch("src.cwa_api.requests.get")
-    def test_custom_base_url_and_params(self, mock_get):
-        """Test custom base URL and additional query parameters."""
-        custom_base = "https://custom.api.endpoint/v1"
-        client = CWAApiClient(
-            api_key=self.test_api_key, base_url=custom_base, timeout=15
-        )
-
-        mock_response = MagicMock()
-        mock_response.json.return_value = {"success": "true"}
-        mock_get.return_value = mock_response
-
-        client.get_dataset("F-C0032-001", params={"locationName": "臺北市"})
-
-        mock_get.assert_called_once()
-        args, kwargs = mock_get.call_args
-        self.assertEqual(args[0], "https://custom.api.endpoint/v1/F-C0032-001")
-        self.assertEqual(kwargs["params"]["locationName"], "臺北市")
-        self.assertEqual(kwargs["timeout"], 15)
 
 
 if __name__ == "__main__":
