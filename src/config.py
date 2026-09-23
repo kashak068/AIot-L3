@@ -18,17 +18,32 @@ DEFAULT_CWA_BASE_URL = "https://opendata.cwa.gov.tw/api/v1/rest/datastore"
 
 def get_cwa_api_key() -> Optional[str]:
     """
-    Retrieve the CWA API key from environment variables.
+    Retrieve the CWA API key.
+
+    Lookup order:
+    1. ``st.secrets["CWA_API_KEY"]`` – Streamlit Community Cloud secrets.
+    2. ``CWA_API_KEY`` environment variable – local ``.env`` file.
 
     :return: The CWA_API_KEY string if set, otherwise None.
     """
+    # Try Streamlit secrets first (works on Streamlit Cloud)
+    try:
+        import streamlit as st
+        api_key = st.secrets.get("CWA_API_KEY")
+        if api_key:
+            return api_key
+    except Exception:
+        pass
+
+    # Fallback to environment variable (local development with .env)
     api_key = os.getenv("CWA_API_KEY")
     if not api_key:
         logger.warning(
-            "CWA_API_KEY environment variable is not configured. "
-            "Please copy .env.example to .env and set your CWA_API_KEY."
+            "CWA_API_KEY is not configured. "
+            "Set it in Streamlit Secrets or in a local .env file."
         )
     return api_key
+
 
 
 def get_cwa_base_url() -> str:
