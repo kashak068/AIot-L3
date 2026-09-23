@@ -9,6 +9,7 @@ import logging
 from typing import List, Optional
 import pandas as pd
 import streamlit as st
+from streamlit_folium import st_folium
 
 from src.config import get_cwa_api_key
 from src.cwa_api import CWAAPIError, CWAApiClient
@@ -18,6 +19,7 @@ from src.db import (
     query_forecast_data,
     save_forecast_dataframe,
 )
+from src.map_visualization import create_taiwan_weather_map
 from src.processor import process_forecast_to_dataframe
 
 logger = logging.getLogger(__name__)
@@ -207,6 +209,21 @@ def render_metrics(df: pd.DataFrame):
         )
 
 
+def render_temperature_map(df: pd.DataFrame):
+    """
+    Render interactive Folium map showing Taiwan temperature markers.
+
+    :param df: Weather DataFrame.
+    """
+    st.subheader("🗺️ 台灣互動式地理氣溫地圖")
+    if df.empty:
+        st.info("尚無地理數據可提供地圖呈現。")
+        return
+
+    folium_map = create_taiwan_weather_map(df)
+    st_folium(folium_map, width="100%", height=450)
+
+
 def render_temperature_chart(df: pd.DataFrame):
     """
     Render temperature trend line chart for minTemp and maxTemp over time.
@@ -310,8 +327,12 @@ def main():
 
     st.divider()
 
-    # Render temperature trend chart
-    render_temperature_chart(filtered_df)
+    # Render Taiwan Folium Map & Line Chart side-by-side or stacked
+    map_col, chart_col = st.columns([1, 1])
+    with map_col:
+        render_temperature_map(filtered_df)
+    with chart_col:
+        render_temperature_chart(filtered_df)
 
     st.divider()
 

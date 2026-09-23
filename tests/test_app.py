@@ -87,6 +87,24 @@ class TestStreamlitApp(unittest.TestCase):
         mock_columns.assert_called_once_with(5)
         self.assertEqual(mock_metric.call_count, 5)
 
+    @patch("app.st_folium")
+    @patch("streamlit.subheader")
+    def test_render_temperature_map(self, mock_subheader, mock_st_folium):
+        """Test rendering Folium temperature map."""
+        sample_df = pd.DataFrame(
+            [
+                {
+                    "locationName": "臺北市",
+                    "minTemp": 24.0,
+                    "maxTemp": 31.0,
+                    "avgTemp": 27.5,
+                }
+            ]
+        )
+        app.render_temperature_map(sample_df)
+        mock_subheader.assert_called_once()
+        mock_st_folium.assert_called_once()
+
     @patch("streamlit.line_chart")
     @patch("streamlit.subheader")
     def test_render_temperature_chart(self, mock_subheader, mock_line_chart):
