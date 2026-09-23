@@ -63,6 +63,25 @@ class TestStreamlitApp(unittest.TestCase):
         self.assertEqual(len(taipei_filtered), 1)
         self.assertEqual(taipei_filtered.iloc[0]["locationName"], "臺北市")
 
+    @patch("streamlit.line_chart")
+    @patch("streamlit.subheader")
+    def test_render_temperature_chart(self, mock_subheader, mock_line_chart):
+        """Test rendering temperature line chart."""
+        sample_df = pd.DataFrame(
+            [
+                {
+                    "locationName": "臺北市",
+                    "startTime": "2026-09-23 12:00:00",
+                    "minTemp": 24.0,
+                    "maxTemp": 31.0,
+                    "avgTemp": 27.5,
+                }
+            ]
+        )
+        app.render_temperature_chart(sample_df)
+        mock_subheader.assert_called_once()
+        mock_line_chart.assert_called_once()
+
 
 if __name__ == "__main__":
     unittest.main()

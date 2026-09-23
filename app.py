@@ -134,6 +134,35 @@ def filter_data_by_location(
     return df
 
 
+def render_temperature_chart(df: pd.DataFrame):
+    """
+    Render temperature trend line chart for minTemp and maxTemp over time.
+
+    :param df: Weather DataFrame containing startTime, minTemp, maxTemp.
+    """
+    st.subheader("📈 氣溫變化趨勢折線圖")
+
+    if df.empty or "startTime" not in df.columns:
+        st.info("尚無足夠之時間序列數據可進行折線圖繪製。")
+        return
+
+    chart_df = df.copy()
+
+    if pd.api.types.is_datetime64_any_dtype(chart_df["startTime"]):
+        chart_df["時間區段"] = chart_df["startTime"].dt.strftime("%m/%d %H:%M")
+    else:
+        chart_df["時間區段"] = chart_df["startTime"].astype(str)
+
+    if "locationName" in chart_df.columns and len(chart_df["locationName"].unique()) > 1:
+        pivot_df = chart_df.groupby("時間區段")[["minTemp", "maxTemp", "avgTemp"]].mean()
+        pivot_df.columns = ["平均最低溫 (°C)", "平均最高溫 (°C)", "全島平均溫 (°C)"]
+    else:
+        pivot_df = chart_df.set_index("時間區段")[["minTemp", "maxTemp", "avgTemp"]]
+        pivot_df.columns = ["最低溫 (°C)", "最高溫 (°C)", "平均溫 (°C)"]
+
+    st.line_chart(pivot_df, use_container_width=True)
+
+
 def main():
     """Main application entry point."""
     init_page()
@@ -158,6 +187,9 @@ def main():
     st.success(
         f"✅ 已載入 `{len(filtered_df)}` 筆天氣觀測與預報數據（全島共包含 {len(locations)} 個縣市測站）"
     )
+
+    # Render temperature trend chart
+    render_temperature_chart(filtered_df)
 
 
 if __name__ == "__main__":
