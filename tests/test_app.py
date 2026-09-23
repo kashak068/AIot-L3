@@ -10,7 +10,7 @@ import app
 
 
 class TestStreamlitApp(unittest.TestCase):
-    """Test suite for Streamlit app initialization, data loading, and location filtering."""
+    """Test suite for Streamlit app initialization, data loading, and layout components."""
 
     @patch("streamlit.set_page_config")
     def test_init_page(self, mock_set_page_config):
@@ -52,13 +52,11 @@ class TestStreamlitApp(unittest.TestCase):
             ]
         )
 
-        # 1. Filter all locations
         all_filtered = app.filter_data_by_location(
             sample_df, app.ALL_LOCATIONS_OPTION
         )
         self.assertEqual(len(all_filtered), 2)
 
-        # 2. Filter specific location
         taipei_filtered = app.filter_data_by_location(sample_df, "臺北市")
         self.assertEqual(len(taipei_filtered), 1)
         self.assertEqual(taipei_filtered.iloc[0]["locationName"], "臺北市")
@@ -81,6 +79,30 @@ class TestStreamlitApp(unittest.TestCase):
         app.render_temperature_chart(sample_df)
         mock_subheader.assert_called_once()
         mock_line_chart.assert_called_once()
+
+    @patch("streamlit.download_button")
+    @patch("streamlit.dataframe")
+    @patch("streamlit.subheader")
+    def test_render_data_table(
+        self, mock_subheader, mock_dataframe, mock_download_button
+    ):
+        """Test rendering data table and CSV download button."""
+        sample_df = pd.DataFrame(
+            [
+                {
+                    "locationName": "臺北市",
+                    "startTime": "2026-09-23 12:00:00",
+                    "endTime": "2026-09-23 18:00:00",
+                    "minTemp": 24.0,
+                    "maxTemp": 31.0,
+                    "weather": "晴時多雲",
+                }
+            ]
+        )
+        app.render_data_table(sample_df)
+        mock_subheader.assert_called_once()
+        mock_dataframe.assert_called_once()
+        mock_download_button.assert_called_once()
 
 
 if __name__ == "__main__":

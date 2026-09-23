@@ -163,6 +163,53 @@ def render_temperature_chart(df: pd.DataFrame):
     st.line_chart(pivot_df, use_container_width=True)
 
 
+def render_data_table(df: pd.DataFrame):
+    """
+    Render structured weather forecast data table with formatting and CSV export button.
+
+    :param df: Weather DataFrame.
+    """
+    st.subheader("📊 結構化數據明細表")
+
+    if df.empty:
+        st.info("尚無資料數據可提供資料表展示。")
+        return
+
+    display_df = df.copy()
+
+    if "startTime" in display_df.columns and pd.api.types.is_datetime64_any_dtype(display_df["startTime"]):
+        display_df["startTime"] = display_df["startTime"].dt.strftime("%Y-%m-%d %H:%M")
+    if "endTime" in display_df.columns and pd.api.types.is_datetime64_any_dtype(display_df["endTime"]):
+        display_df["endTime"] = display_df["endTime"].dt.strftime("%Y-%m-%d %H:%M")
+
+    rename_map = {
+        "locationName": "縣市名稱",
+        "startTime": "預報開始時間",
+        "endTime": "預報結束時間",
+        "minTemp": "最低溫 (°C)",
+        "maxTemp": "最高溫 (°C)",
+        "tempDiff": "溫差 (°C)",
+        "avgTemp": "平均溫 (°C)",
+        "weather": "天氣現象",
+        "pop": "降雨機率 (%)",
+        "comfort": "體感舒適度",
+    }
+
+    cols_to_display = [c for c in rename_map.keys() if c in display_df.columns]
+    formatted_df = display_df[cols_to_display].rename(columns=rename_map)
+
+    st.dataframe(formatted_df, use_container_width=True, hide_index=True)
+
+    csv_data = formatted_df.to_csv(index=False).encode("utf-8-sig")
+    st.download_button(
+        label="📥 下載 CSV 資料表",
+        data=csv_data,
+        file_name="taiwan_weather_forecast.csv",
+        mime="text/csv",
+        help="點擊將當前過濾後之氣候數據下載為 CSV 試算表檔案",
+    )
+
+
 def main():
     """Main application entry point."""
     init_page()
@@ -190,6 +237,11 @@ def main():
 
     # Render temperature trend chart
     render_temperature_chart(filtered_df)
+
+    st.divider()
+
+    # Render structured data table & CSV download button
+    render_data_table(filtered_df)
 
 
 if __name__ == "__main__":
