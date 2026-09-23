@@ -10,7 +10,7 @@ import app
 
 
 class TestStreamlitApp(unittest.TestCase):
-    """Test suite for Streamlit app initialization and data loading."""
+    """Test suite for Streamlit app initialization, data loading, and location filtering."""
 
     @patch("streamlit.set_page_config")
     def test_init_page(self, mock_set_page_config):
@@ -39,9 +39,29 @@ class TestStreamlitApp(unittest.TestCase):
         sample_df = pd.DataFrame([{"locationName": "臺北市", "minTemp": 24}])
         mock_query.return_value = sample_df
 
-        df = app.load_weather_data.__wrapped__()  # Access un-cached function for testing
+        df = app.load_weather_data.__wrapped__()
         self.assertEqual(len(df), 1)
         self.assertEqual(df.iloc[0]["locationName"], "臺北市")
+
+    def test_filter_data_by_location(self):
+        """Test filtering dataset by selected location string."""
+        sample_df = pd.DataFrame(
+            [
+                {"locationName": "臺北市", "minTemp": 24},
+                {"locationName": "高雄市", "minTemp": 26},
+            ]
+        )
+
+        # 1. Filter all locations
+        all_filtered = app.filter_data_by_location(
+            sample_df, app.ALL_LOCATIONS_OPTION
+        )
+        self.assertEqual(len(all_filtered), 2)
+
+        # 2. Filter specific location
+        taipei_filtered = app.filter_data_by_location(sample_df, "臺北市")
+        self.assertEqual(len(taipei_filtered), 1)
+        self.assertEqual(taipei_filtered.iloc[0]["locationName"], "臺北市")
 
 
 if __name__ == "__main__":
