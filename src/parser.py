@@ -3,6 +3,7 @@ Parser module for CWA API JSON responses.
 
 Extracts structured weather information from raw JSON payload responses
 received from Central Weather Administration (CWA) Open Data endpoints.
+Includes temperature feature extraction (MinT, MaxT, range, average).
 """
 
 import logging
@@ -90,3 +91,84 @@ def parse_forecast_json(json_data: Dict[str, Any]) -> List[Dict[str, Any]]:
         parsed_loc = parse_location_weather(loc)
         results.append(parsed_loc)
     return results
+
+
+def parse_temperature_value(val_str: Optional[Any]) -> Optional[float]:
+    """
+    Safely convert a temperature parameter value string to float.
+
+    :param val_str: Temperature value representation (e.g., '24', '31.5').
+    :return: Float value or None if conversion fails.
+    """
+    if val_str is None:
+        return None
+    try:
+        return float(val_str)
+    except (ValueError, TypeError):
+        logger.warning("Failed to convert temperature value '%s' to float.", val_str)
+        return None
+
+
+def extract_temperature_records(parsed_location: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Extract flattened temperature records (MinT, MaxT, diff, avg) per time interval.
+
+    :param parsed_location: Dictionary returned by parse_location_weather().
+    :return: List of time-slot temperature dictionaries.
+    """
+    location_name = parsed_location.get("locationName", "Unknown")
+    elements = parsed_location.get("elements", {})
+
+    mint_list = elements.get("MinT", [])
+    maxt_list = elements.get("MaxT", [])
+    wx_list = elements.get("Wx", [])
+    pop_list = elements.get("PoP", [])
+    ci_list = elements.get("CI", [])
+
+    records: List[Dict[str, Any]] = []
+
+    for i, mint_slot in enumerate(mint_list):
+        start_time = mint_slot.get("startTime")
+        end_time = mint_slot.get("endTime")
+
+        min_temp = parse_temperature_value(mint_slot.get("parameterName"))
+
+        maxt_slot = maxt_list[i] if i < len(maxt_list) else {}
+        max_temp = parse_temperature_value(maxt_slot.get("parameterName"))
+
+        wx_slot = wx_list[i] if i < len(wx_list) else {}
+        weather_text = wx_slot.get("parameterName", "")
+
+        pop_slot = pop_list[i] if i < len(pop_list) else {}
+        pop_val = parse_temperature_value(pop_slot.get("parameterName"))
+
+        ci_slot = ci_list[i] if i < len(ci_list) else {}
+        comfort_text = ci_slot.get("parameterName", "")
+
+        temp_diff = (
+            round(max_temp - min_temp, 1)
+            if (max_temp is not None and min_temp is not None)
+            else None
+        )
+        avg_temp = (
+            round((max_temp + min_temp) / 2.0, 1)
+            if (max_temp is not None and min_temp is not None)
+            else None
+        )
+
+        records.append(
+            {
+                "locationName": location_name,
+                "startTime": start_time,
+                "endTime": end_time,
+                "minTemp": min_temp,
+                "maxTemp": max_temp,
+                "tempDiff": temp_diff,
+                "avgTemp": avg_temp,
+                "weather": weather_text,
+                "pop": pop_val,
+                "comfort": comfort_text,
+            }
+        )
+
+    return records

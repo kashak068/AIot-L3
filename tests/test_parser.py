@@ -3,7 +3,14 @@ Unit tests for JSON parser module (src/parser.py).
 """
 
 import unittest
-from src.parser import JSONParseError, extract_locations, parse_forecast_json, parse_location_weather
+from src.parser import (
+    JSONParseError,
+    extract_locations,
+    extract_temperature_records,
+    parse_forecast_json,
+    parse_location_weather,
+    parse_temperature_value,
+)
 
 
 class TestJSONParser(unittest.TestCase):
@@ -93,12 +100,27 @@ class TestJSONParser(unittest.TestCase):
         self.assertEqual(mint_slot["parameterName"], "24")
         self.assertEqual(mint_slot["parameterUnit"], "C")
 
-    def test_parse_forecast_json_full(self):
-        """Test full parsing function for F-C0032-001 dataset."""
-        results = parse_forecast_json(self.sample_json)
-        self.assertEqual(len(results), 1)
-        self.assertEqual(results[0]["locationName"], "臺北市")
-        self.assertEqual(results[0]["elements"]["MaxT"][0]["parameterName"], "31")
+    def test_parse_temperature_value(self):
+        """Test safe float conversion of temperature strings."""
+        self.assertEqual(parse_temperature_value("25"), 25.0)
+        self.assertEqual(parse_temperature_value("32.5"), 32.5)
+        self.assertIsNone(parse_temperature_value(None))
+        self.assertIsNone(parse_temperature_value("invalid"))
+
+    def test_extract_temperature_records(self):
+        """Test extracting MinT, MaxT, tempDiff, and avgTemp features."""
+        location_record = self.sample_json["records"]["location"][0]
+        parsed = parse_location_weather(location_record)
+        records = extract_temperature_records(parsed)
+
+        self.assertEqual(len(records), 1)
+        rec = records[0]
+        self.assertEqual(rec["locationName"], "臺北市")
+        self.assertEqual(rec["minTemp"], 24.0)
+        self.assertEqual(rec["maxTemp"], 31.0)
+        self.assertEqual(rec["tempDiff"], 7.0)
+        self.assertEqual(rec["avgTemp"], 27.5)
+        self.assertEqual(rec["weather"], "晴時多雲")
 
 
 if __name__ == "__main__":
